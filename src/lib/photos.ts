@@ -1,4 +1,4 @@
-import { list, getDownloadUrl } from "@vercel/blob";
+import { list } from "@vercel/blob";
 import path from "path";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif"]);
@@ -28,17 +28,28 @@ export async function getPhotoBlobUrl(filename: string): Promise<string | null> 
   return result.blobs[0]?.url ?? null;
 }
 
+function blobFetchHeaders() {
+  return {
+    Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
+  };
+}
+
 export async function getPhotoBuffer(filename: string): Promise<{ buffer: Buffer; mimeType: string }> {
   const blobUrl = await getPhotoBlobUrl(filename);
   if (!blobUrl) throw new Error("Photo not found");
 
-  const downloadUrl = await getDownloadUrl(blobUrl);
-  const response = await fetch(downloadUrl);
+  const response = await fetch(blobUrl, { headers: blobFetchHeaders() });
   if (!response.ok) throw new Error("Failed to fetch photo");
 
   const buffer = Buffer.from(await response.arrayBuffer());
   const mimeType = getMimeType(filename);
   return { buffer, mimeType };
+}
+
+export async function fetchBlobBuffer(blobUrl: string): Promise<Buffer> {
+  const response = await fetch(blobUrl, { headers: blobFetchHeaders() });
+  if (!response.ok) throw new Error("Failed to fetch blob");
+  return Buffer.from(await response.arrayBuffer());
 }
 
 export function getMimeType(filename: string): string {

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPhotoBuffer } from "@/lib/photos";
 import { generateTitleAndDescription } from "@/lib/claude";
-import { list, getDownloadUrl } from "@vercel/blob";
+import { list } from "@vercel/blob";
+import { fetchBlobBuffer } from "@/lib/photos";
 
 export async function POST(request: NextRequest) {
   const { transcription, filename } = await request.json();
@@ -34,9 +35,7 @@ export async function POST(request: NextRequest) {
         const result = await list({ prefix: `pdfs/${pdf.storedFilename}`, limit: 1 });
         const blobUrl = result.blobs[0]?.url;
         if (blobUrl) {
-          const downloadUrl = await getDownloadUrl(blobUrl);
-          const res = await fetch(downloadUrl);
-          const pdfBuffer = Buffer.from(await res.arrayBuffer());
+          const pdfBuffer = await fetchBlobBuffer(blobUrl);
           pdfContents.push({
             filename: pdf.originalFilename,
             base64: pdfBuffer.toString("base64"),
