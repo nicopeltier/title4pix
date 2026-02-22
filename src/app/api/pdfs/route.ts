@@ -3,6 +3,10 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { put, del, list } from "@vercel/blob";
 
+export const config = {
+  maxDuration: 30,
+};
+
 const MAX_PDFS = 5;
 
 export async function GET() {
@@ -32,22 +36,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const storedFilename = `${randomUUID()}.pdf`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  try {
+    const storedFilename = `${randomUUID()}.pdf`;
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-  await put(`pdfs/${storedFilename}`, buffer, {
-    access: "private",
-    addRandomSuffix: false,
-  });
+    await put(`pdfs/${storedFilename}`, buffer, {
+      access: "private",
+      addRandomSuffix: false,
+    });
 
-  const pdf = await prisma.pdfFile.create({
-    data: {
-      originalFilename: file.name,
-      storedFilename,
-    },
-  });
+    const pdf = await prisma.pdfFile.create({
+      data: {
+        originalFilename: file.name,
+        storedFilename,
+      },
+    });
 
-  return NextResponse.json(pdf, { status: 201 });
+    return NextResponse.json(pdf, { status: 201 });
+  } catch (error) {
+    console.error("PDF upload error:", error);
+    const message = error instanceof Error ? error.message : "Erreur inconnue";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: NextRequest) {
