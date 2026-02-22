@@ -3,9 +3,8 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { put, del, list } from "@vercel/blob";
 
-export const config = {
-  maxDuration: 30,
-};
+// Allow up to 20 MB uploads
+export const bodySize = "20mb";
 
 const MAX_PDFS = 5;
 
@@ -68,7 +67,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "PDF non trouvé" }, { status: 404 });
   }
 
-  // Delete from Blob storage
   try {
     const result = await list({ prefix: `pdfs/${pdf.storedFilename}`, limit: 1 });
     if (result.blobs[0]) {

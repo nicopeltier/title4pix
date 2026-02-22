@@ -71,8 +71,8 @@ export default function SettingsPage() {
         setPdfs(data.pdfs);
         toast.success("PDF ajouté");
       }
-    } catch {
-      toast.error("Erreur lors de l'upload");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'upload");
     }
 
     setUploading(false);
