@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPhotoBlobUrl } from "@/lib/photos";
+import { getDownloadUrl } from "@vercel/blob";
 
 export async function GET(
   _request: NextRequest,
@@ -13,7 +14,8 @@ export async function GET(
       return NextResponse.json({ error: "Image not found" }, { status: 404 });
     }
 
-    return NextResponse.redirect(url);
+    const downloadUrl = await getDownloadUrl(url);
+    return NextResponse.redirect(downloadUrl);
   } catch {
     return NextResponse.json({ error: "Image not found" }, { status: 404 });
   }

@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
 
   await put(`pdfs/${storedFilename}`, buffer, {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
   });
 

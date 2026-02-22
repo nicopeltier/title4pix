@@ -1,4 +1,4 @@
-import { list } from "@vercel/blob";
+import { list, getDownloadUrl } from "@vercel/blob";
 import path from "path";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tiff", ".tif"]);
@@ -29,10 +29,11 @@ export async function getPhotoBlobUrl(filename: string): Promise<string | null> 
 }
 
 export async function getPhotoBuffer(filename: string): Promise<{ buffer: Buffer; mimeType: string }> {
-  const url = await getPhotoBlobUrl(filename);
-  if (!url) throw new Error("Photo not found");
+  const blobUrl = await getPhotoBlobUrl(filename);
+  if (!blobUrl) throw new Error("Photo not found");
 
-  const response = await fetch(url);
+  const downloadUrl = await getDownloadUrl(blobUrl);
+  const response = await fetch(downloadUrl);
   if (!response.ok) throw new Error("Failed to fetch photo");
 
   const buffer = Buffer.from(await response.arrayBuffer());

@@ -42,7 +42,7 @@ async function main() {
     const buffer = await readFile(filePath);
 
     await put(`photos/${filename}`, buffer, {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
     });
 
