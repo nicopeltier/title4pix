@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPhotoBlobUrl } from "@/lib/photos";
-import { getDownloadUrl } from "@vercel/blob";
+import { getPhotoBuffer, getMimeType } from "@/lib/photos";
 
 export async function GET(
   _request: NextRequest,
@@ -9,13 +8,14 @@ export async function GET(
   const { filename } = await params;
 
   try {
-    const url = await getPhotoBlobUrl(filename);
-    if (!url) {
-      return NextResponse.json({ error: "Image not found" }, { status: 404 });
-    }
+    const { buffer, mimeType } = await getPhotoBuffer(filename);
 
-    const downloadUrl = await getDownloadUrl(url);
-    return NextResponse.redirect(downloadUrl);
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": mimeType,
+        "Cache-Control": "public, max-age=3600",
+      },
+    });
   } catch {
     return NextResponse.json({ error: "Image not found" }, { status: 404 });
   }
