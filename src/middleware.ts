@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public routes: login page and auth API
-  if (pathname === "/" || pathname.startsWith("/api/auth")) {
+  // Public routes: login page, auth API, and Blob upload webhook callback
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/api/auth") ||
+    pathname === "/api/pdfs/upload"
+  ) {
     return NextResponse.next();
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { upload } from "@vercel/blob/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,14 +59,29 @@ export default function SettingsPage() {
     if (!file) return;
     setUploading(true);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const res = await fetch("/api/pdfs", { method: "POST", body: formData });
+      const storedFilename = `${crypto.randomUUID()}.pdf`;
+
+      // Upload directly to Vercel Blob (bypasses 4.5 MB serverless limit)
+      await upload(`pdfs/${storedFilename}`, file, {
+        access: "private",
+        handleUploadUrl: "/api/pdfs/upload",
+        clientPayload: file.name,
+      });
+
+      // Register the PDF in the database
+      const res = await fetch("/api/pdfs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          originalFilename: file.name,
+          storedFilename,
+        }),
+      });
+
       if (!res.ok) {
         const data = await res.json();
-        toast.error(data.error || "Erreur lors de l'upload");
+        toast.error(data.error || "Erreur lors de l'enregistrement");
       } else {
         const data = await fetch("/api/pdfs").then((r) => r.json());
         setPdfs(data.pdfs);

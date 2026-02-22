@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { put, del, list } from "@vercel/blob";
-
-// Allow up to 20 MB uploads
-export const bodySize = "20mb";
+import { del, list } from "@vercel/blob";
 
 const MAX_PDFS = 5;
 
@@ -17,6 +13,15 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { originalFilename, storedFilename } = await request.json();
+
+  if (!originalFilename || !storedFilename) {
+    return NextResponse.json(
+      { error: "originalFilename et storedFilename requis" },
+      { status: 400 }
+    );
+  }
+
   const count = await prisma.pdfFile.count();
   if (count >= MAX_PDFS) {
     return NextResponse.json(
@@ -25,35 +30,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file") as File | null;
-
-  if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
-    return NextResponse.json(
-      { error: "Un fichier PDF est requis" },
-      { status: 400 }
-    );
-  }
-
   try {
-    const storedFilename = `${randomUUID()}.pdf`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    await put(`pdfs/${storedFilename}`, buffer, {
-      access: "private",
-      addRandomSuffix: false,
-    });
-
     const pdf = await prisma.pdfFile.create({
-      data: {
-        originalFilename: file.name,
-        storedFilename,
-      },
+      data: { originalFilename, storedFilename },
     });
 
     return NextResponse.json(pdf, { status: 201 });
   } catch (error) {
-    console.error("PDF upload error:", error);
+    console.error("PDF register error:", error);
     const message = error instanceof Error ? error.message : "Erreur inconnue";
     return NextResponse.json({ error: message }, { status: 500 });
   }
