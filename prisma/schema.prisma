@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Photo {
+  id            Int      @id @default(autoincrement())
+  filename      String   @unique
+  title         String?
+  description   String?
+  transcription String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Settings {
+  id              Int    @id @default(1)
+  titleMinChars   Int    @default(20)
+  titleMaxChars   Int    @default(80)
+  descMinChars    Int    @default(100)
+  descMaxChars    Int    @default(500)
+  instructions    String @default("")
+  photographerUrl String @default("")
+}
+
+model PdfFile {
+  id               Int      @id @default(autoincrement())
+  originalFilename String
+  storedFilename   String   @unique
+  createdAt        DateTime @default(now())
+}
