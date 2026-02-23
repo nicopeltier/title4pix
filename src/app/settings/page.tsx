@@ -28,14 +28,18 @@ interface PdfFile {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [pdfs, setPdfs] = useState<PdfFile[]>([]);
-  const [totalTokens, setTotalTokens] = useState<number>(0);
+  const [totalInputTokens, setTotalInputTokens] = useState(0);
+  const [totalOutputTokens, setTotalOutputTokens] = useState(0);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setSettings);
     fetch("/api/pdfs").then((r) => r.json()).then((d) => setPdfs(d.pdfs));
-    fetch("/api/photos").then((r) => r.json()).then((d) => setTotalTokens(d.totalTokens ?? 0));
+    fetch("/api/photos").then((r) => r.json()).then((d) => {
+      setTotalInputTokens(d.totalInputTokens ?? 0);
+      setTotalOutputTokens(d.totalOutputTokens ?? 0);
+    });
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -266,12 +270,19 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Utilisation</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Tokens Claude consommés (toutes photos) :{" "}
+              Tokens input :{" "}
+              <span className="font-medium text-foreground">{totalInputTokens.toLocaleString("fr-FR")}</span>
+              {" "}&mdash; Tokens output :{" "}
+              <span className="font-medium text-foreground">{totalOutputTokens.toLocaleString("fr-FR")}</span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Co&ucirc;t estim&eacute; :{" "}
               <span className="font-medium text-foreground">
-                {totalTokens.toLocaleString("fr-FR")}
+                {((totalInputTokens * 3 + totalOutputTokens * 15) / 1_000_000 * 0.92).toLocaleString("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 4 })}
               </span>
+              <span className="text-xs ml-1">(Sonnet 4.6 : 3$/MTok input, 15$/MTok output, taux 0,92)</span>
             </p>
           </CardContent>
         </Card>

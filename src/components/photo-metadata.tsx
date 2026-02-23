@@ -15,7 +15,13 @@ interface Metadata {
   title: string;
   description: string;
   transcription: string;
-  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+// Claude Sonnet 4.6 pricing: $3/MTok input, $15/MTok output, ~0.92 EUR/USD
+function estimateCostEur(inputTokens: number, outputTokens: number): number {
+  return (inputTokens * 3 + outputTokens * 15) / 1_000_000 * 0.92;
 }
 
 interface CharLimits {
@@ -26,7 +32,7 @@ interface CharLimits {
 }
 
 export function PhotoMetadata({ filename }: PhotoMetadataProps) {
-  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", totalTokens: 0 });
+  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", inputTokens: 0, outputTokens: 0 });
   const [limits, setLimits] = useState<CharLimits | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -58,7 +64,8 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
             title: data.title ?? "",
             description: data.description ?? "",
             transcription: data.transcription ?? "",
-            totalTokens: data.totalTokens ?? 0,
+            inputTokens: data.inputTokens ?? 0,
+            outputTokens: data.outputTokens ?? 0,
           });
           setLoading(false);
         }
@@ -121,7 +128,8 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
           title: data.title,
           description: data.description,
           transcription: data.transcription,
-          totalTokens: data.totalTokens ?? 0,
+          inputTokens: data.inputTokens ?? 0,
+          outputTokens: data.outputTokens ?? 0,
         });
         toast.success("Titre et descriptif générés");
       } catch (err) {
@@ -143,7 +151,8 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
         <Label className="text-xs text-muted-foreground">Fichier</Label>
         <p className="text-sm font-medium break-all">{filename}</p>
         <p className="text-xs text-muted-foreground">
-          {meta.totalTokens.toLocaleString("fr-FR")} tokens utilisés
+          {(meta.inputTokens + meta.outputTokens).toLocaleString("fr-FR")} tokens
+          {" "}({estimateCostEur(meta.inputTokens, meta.outputTokens).toLocaleString("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 4 })})
         </p>
       </div>
 

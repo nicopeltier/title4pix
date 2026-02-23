@@ -10,7 +10,7 @@ export async function GET() {
   // Fetch existing metadata for all photos
   const photos = await prisma.photo.findMany({
     where: { filename: { in: files } },
-    select: { filename: true, title: true, description: true, totalTokens: true },
+    select: { filename: true, title: true, description: true, inputTokens: true, outputTokens: true },
   });
 
   const metaMap = new Map(photos.map((p) => [p.filename, p]));
@@ -25,8 +25,9 @@ export async function GET() {
     };
   });
 
-  // Aggregate total tokens across all photos
-  const totalTokens = photos.reduce((sum, p) => sum + p.totalTokens, 0);
+  // Aggregate tokens across all photos
+  const totalInputTokens = photos.reduce((sum, p) => sum + p.inputTokens, 0);
+  const totalOutputTokens = photos.reduce((sum, p) => sum + p.outputTokens, 0);
 
-  return NextResponse.json({ photos: result, total: files.length, totalTokens });
+  return NextResponse.json({ photos: result, total: files.length, totalInputTokens, totalOutputTokens });
 }
