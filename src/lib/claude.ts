@@ -21,6 +21,8 @@ interface GenerateInput {
 interface GenerateOutput {
   title: string;
   description: string;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export async function generateTitleAndDescription(
@@ -116,5 +118,11 @@ export async function generateTitleAndDescription(
     throw new Error("No text response from Claude");
   }
 
-  return JSON.parse(textBlock.text) as GenerateOutput;
+  const parsed = JSON.parse(textBlock.text) as { title: string; description: string };
+
+  return {
+    ...parsed,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
 }

@@ -13,6 +13,7 @@ model Photo {
   title         String?
   description   String?
   transcription String?
+  totalTokens   Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

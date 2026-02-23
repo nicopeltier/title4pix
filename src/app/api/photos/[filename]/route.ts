@@ -16,6 +16,7 @@ export async function GET(
     title: photo?.title ?? "",
     description: photo?.description ?? "",
     transcription: photo?.transcription ?? "",
+    totalTokens: photo?.totalTokens ?? 0,
   });
 }
 
@@ -42,5 +43,6 @@ export async function PUT(
     title: photo.title ?? "",
     description: photo.description ?? "",
     transcription: photo.transcription ?? "",
+    totalTokens: photo.totalTokens,
   });
 }

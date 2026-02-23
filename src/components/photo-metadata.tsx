@@ -15,6 +15,7 @@ interface Metadata {
   title: string;
   description: string;
   transcription: string;
+  totalTokens: number;
 }
 
 interface CharLimits {
@@ -25,7 +26,7 @@ interface CharLimits {
 }
 
 export function PhotoMetadata({ filename }: PhotoMetadataProps) {
-  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "" });
+  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", totalTokens: 0 });
   const [limits, setLimits] = useState<CharLimits | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -57,6 +58,7 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
             title: data.title ?? "",
             description: data.description ?? "",
             transcription: data.transcription ?? "",
+            totalTokens: data.totalTokens ?? 0,
           });
           setLoading(false);
         }
@@ -119,6 +121,7 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
           title: data.title,
           description: data.description,
           transcription: data.transcription,
+          totalTokens: data.totalTokens ?? 0,
         });
         toast.success("Titre et descriptif générés");
       } catch (err) {
@@ -139,6 +142,9 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
       <div>
         <Label className="text-xs text-muted-foreground">Fichier</Label>
         <p className="text-sm font-medium break-all">{filename}</p>
+        <p className="text-xs text-muted-foreground">
+          {meta.totalTokens.toLocaleString("fr-FR")} tokens utilisés
+        </p>
       </div>
 
       <div className="space-y-1.5">

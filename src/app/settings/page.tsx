@@ -28,12 +28,14 @@ interface PdfFile {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [pdfs, setPdfs] = useState<PdfFile[]>([]);
+  const [totalTokens, setTotalTokens] = useState<number>(0);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then(setSettings);
     fetch("/api/pdfs").then((r) => r.json()).then((d) => setPdfs(d.pdfs));
+    fetch("/api/photos").then((r) => r.json()).then((d) => setTotalTokens(d.totalTokens ?? 0));
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -257,6 +259,20 @@ export default function SettingsPage() {
             )}
 
             {uploading && <p className="text-sm text-muted-foreground animate-pulse">Upload en cours...</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Utilisation</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Tokens Claude consommés (toutes photos) :{" "}
+              <span className="font-medium text-foreground">
+                {totalTokens.toLocaleString("fr-FR")}
+              </span>
+            </p>
           </CardContent>
         </Card>
 

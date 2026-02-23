@@ -62,19 +62,23 @@ export async function POST(request: NextRequest) {
       pdfContents,
     });
 
-    // Save to database
-    await prisma.photo.upsert({
+    const tokensUsed = result.inputTokens + result.outputTokens;
+
+    // Save to database (increment totalTokens cumulatively)
+    const photo = await prisma.photo.upsert({
       where: { filename },
       update: {
         title: result.title,
         description: result.description,
         transcription,
+        totalTokens: { increment: tokensUsed },
       },
       create: {
         filename,
         title: result.title,
         description: result.description,
         transcription,
+        totalTokens: tokensUsed,
       },
     });
 
@@ -82,6 +86,7 @@ export async function POST(request: NextRequest) {
       title: result.title,
       description: result.description,
       transcription,
+      totalTokens: photo.totalTokens,
     });
   } catch (error) {
     console.error("Generate error:", error);
