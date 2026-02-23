@@ -85,6 +85,8 @@ model Photo {
   title         String?                // titre généré ou saisi
   description   String?                // descriptif généré ou saisi
   transcription String?                // transcription vocale brute
+  inputTokens   Int      @default(0)   // tokens input Claude cumulés
+  outputTokens  Int      @default(0)   // tokens output Claude cumulés
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -133,11 +135,11 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 |---|---|---|---|---|
 | `/api/auth` | POST | Login | `{ password }` | `{ ok: true }` + cookie |
 | `/api/auth` | DELETE | Logout | - | `{ ok: true }` |
-| `/api/photos` | GET | Liste photos | - | `{ photos: [{index, filename, hasTitle, hasDescription}], total }` |
-| `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription }` |
-| `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription? }` | Métadonnées mises à jour |
+| `/api/photos` | GET | Liste photos | - | `{ photos: [{index, filename, hasTitle, hasDescription}], total, totalInputTokens, totalOutputTokens }` |
+| `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription, inputTokens, outputTokens }` |
+| `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription? }` | Métadonnées mises à jour (incluant `inputTokens`, `outputTokens`) |
 | `/api/photos/[filename]/image` | GET | Servir image | - | Redirect → URL Blob signée |
-| `/api/generate` | POST | Génération IA | `{ transcription, filename }` | `{ title, description, transcription }` |
+| `/api/generate` | POST | Génération IA | `{ transcription, filename }` | `{ title, description, transcription, inputTokens, outputTokens }` |
 | `/api/settings` | GET | Lire settings | - | Objet Settings |
 | `/api/settings` | PUT | MAJ settings | Champs Settings partiels | Settings mis à jour |
 | `/api/pdfs` | GET | Liste PDFs | - | `{ pdfs: PdfFile[] }` |
@@ -157,7 +159,7 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 **Composants principaux** :
 
 - **`PhotoViewer`** (`photos, currentIndex, onNavigate`) : affiche l'image courante, navigation prev/next par boutons et flèches clavier, saisie directe du numéro de photo
-- **`PhotoMetadata`** (`filename`) : panneau d'édition titre/description avec compteurs de caractères (+ limites min/max depuis settings), champ transcription en lecture seule, auto-save debounce 500ms, intègre VoiceRecorder
+- **`PhotoMetadata`** (`filename`) : panneau d'édition titre/description avec compteurs de caractères (+ limites min/max depuis settings), affichage tokens et coût estimé en euros par photo, champ transcription en lecture seule, auto-save debounce 500ms, intègre VoiceRecorder
 - **`VoiceRecorder`** (`onTranscription, disabled?`) : bouton enregistrement/arrêt, Web Speech API en `fr-FR` continu, affiche la transcription interim en italique
 - **`AppHeader`** : barre de navigation (Photos, Paramètres, Export) + bouton déconnexion, highlight de la route active
 
@@ -190,8 +192,9 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 
 **Output** (`GenerateOutput`) via `output_config.format` (JSON schema) :
 ```typescript
-{ title: string, description: string }
+{ title: string, description: string, inputTokens: number, outputTokens: number }
 ```
+Les champs `inputTokens` et `outputTokens` sont extraits de `response.usage` de l'API Anthropic.
 
 **Construction du prompt** :
 - **System** (avec `cache_control: ephemeral`) : rôle assistant photo, URL photographe, consignes, contraintes caractères
@@ -207,8 +210,24 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 3. Télécharge l'image depuis Vercel Blob → base64
 4. Télécharge tous les PDFs depuis Vercel Blob → base64
 5. Appelle `generateTitleAndDescription()` via Claude SDK
-6. Sauvegarde titre + description + transcription en BDD (upsert)
-7. Retourne le résultat au client
+6. Sauvegarde titre + description + transcription en BDD (upsert), incrémente `inputTokens` et `outputTokens` de façon cumulative
+7. Retourne le résultat au client (incluant `inputTokens` et `outputTokens` cumulés)
+
+### Suivi des tokens et estimation des coûts
+
+Chaque appel à Claude est tracé par photo via les champs `inputTokens` et `outputTokens` du modèle `Photo`. Les valeurs sont **cumulatives** : si on régénère le titre d'une photo, les tokens s'additionnent.
+
+**Tarifs Claude Sonnet 4.6** : $3 / MTok input, $15 / MTok output
+
+**Formule de coût estimé en euros** :
+```
+coût = (inputTokens × 3 + outputTokens × 15) / 1 000 000 × 0,92
+```
+Le taux EUR/USD de 0,92 est fixe (approximation).
+
+**Affichage** :
+- **Par photo** : sous le nom du fichier dans `PhotoMetadata`, affiche le nombre total de tokens et le coût estimé en euros
+- **Global** : dans la page Paramètres, carte "Utilisation" avec tokens input/output séparés et coût total estimé
 
 ## Authentification
 
@@ -259,7 +278,7 @@ BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...  # pour tester avec Blob en local
 ```bash
 # Développement
 npm run dev                        # Démarrer en dev (localhost:3000)
-npm run build                      # Build production
+npm run build                      # Build production (migrate deploy + generate + next build)
 npm run lint                       # Linter ESLint
 
 # Base de données
