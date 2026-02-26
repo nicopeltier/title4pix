@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getPhotoList } from "@/lib/photos";
 import { assignThemes } from "@/lib/claude";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   const { numThemes } = await request.json();
 
@@ -43,38 +45,35 @@ export async function POST(request: NextRequest) {
     // Call Claude to assign themes
     const result = await assignThemes({ photos: photosForAI, numThemes });
 
-    // Update each photo's theme in DB
-    const updates = files.map((filename) => {
+    // Update each photo's theme + distribute tokens in a single transaction
+    const inputPerPhoto = Math.ceil(result.inputTokens / files.length);
+    const outputPerPhoto = Math.ceil(result.outputTokens / files.length);
+
+    const photoOps = files.map((filename) => {
       const theme = result.assignments[filename] ?? "";
       return prisma.photo.upsert({
         where: { filename },
-        update: { theme },
-        create: { filename, theme },
+        update: {
+          theme,
+          inputTokens: { increment: inputPerPhoto },
+          outputTokens: { increment: outputPerPhoto },
+        },
+        create: {
+          filename,
+          theme,
+          inputTokens: inputPerPhoto,
+          outputTokens: outputPerPhoto,
+        },
       });
     });
-    await prisma.$transaction(updates);
 
-    // Distribute tokens evenly across all photos
-    const inputPerPhoto = Math.ceil(result.inputTokens / files.length);
-    const outputPerPhoto = Math.ceil(result.outputTokens / files.length);
-    await prisma.$transaction(
-      files.map((filename) =>
-        prisma.photo.update({
-          where: { filename },
-          data: {
-            inputTokens: { increment: inputPerPhoto },
-            outputTokens: { increment: outputPerPhoto },
-          },
-        })
-      )
-    );
-
-    // Save themes list in Settings
-    await prisma.settings.upsert({
+    const settingsOp = prisma.settings.upsert({
       where: { id: 1 },
       update: { themes: JSON.stringify(result.themes) },
       create: { id: 1, themes: JSON.stringify(result.themes) },
     });
+
+    await prisma.$transaction([...photoOps, settingsOp]);
 
     return NextResponse.json({
       themes: result.themes,
