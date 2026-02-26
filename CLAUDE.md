@@ -55,6 +55,7 @@ title4pix/
 │   │       │   ├── route.ts            # GET/PUT métadonnées
 │   │       │   └── image/route.ts      # GET image (redirect Blob signé)
 │   │       ├── generate/route.ts       # POST transcription → Claude → titre+desc
+│   │       ├── themes/assign/route.ts  # POST attribution thèmes IA (batch)
 │   │       ├── settings/route.ts       # GET/PUT settings singleton
 │   │       ├── pdfs/route.ts           # GET/POST/DELETE PDFs (Blob + DB)
 │   │       └── export/route.ts         # GET export TSV ou XLSX
@@ -62,11 +63,11 @@ title4pix/
 │   │   ├── ui/                   # shadcn (button, card, input, label, progress, sonner, textarea)
 │   │   ├── app-header.tsx        # navigation + logout
 │   │   ├── photo-viewer.tsx      # affichage photo + navigation (clavier + boutons)
-│   │   ├── photo-metadata.tsx    # édition titre/desc + compteurs caractères + voice
+│   │   ├── photo-metadata.tsx    # édition titre/desc/thème + compteurs caractères + voice
 │   │   └── voice-recorder.tsx    # enregistrement vocal Web Speech API
 │   ├── lib/
 │   │   ├── prisma.ts             # singleton PrismaClient avec PrismaPg adapter
-│   │   ├── claude.ts             # wrapper Anthropic SDK (structured output JSON)
+│   │   ├── claude.ts             # wrapper Anthropic SDK (génération titre/desc + attribution thèmes)
 │   │   ├── photos.ts             # lecture photos depuis Vercel Blob
 │   │   ├── auth.ts               # gestion cookie session httpOnly
 │   │   └── utils.ts              # cn() helper (clsx + tailwind-merge)
@@ -85,6 +86,7 @@ model Photo {
   title         String?                // titre généré ou saisi
   description   String?                // descriptif généré ou saisi
   transcription String?                // transcription vocale brute
+  theme         String?                // thème attribué par l'IA ou manuellement
   inputTokens   Int      @default(0)   // tokens input Claude cumulés
   outputTokens  Int      @default(0)   // tokens output Claude cumulés
   createdAt     DateTime @default(now())
@@ -99,6 +101,7 @@ model Settings {
   descMaxChars    Int    @default(500)
   instructions    String @default("")   // consignes IA personnalisées
   photographerUrl String @default("")   // URL site web du photographe
+  themes          String @default("")   // liste JSON des thèmes déterminés (ex: '["Paysage","Portrait"]')
 }
 
 model PdfFile {
@@ -135,9 +138,9 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 |---|---|---|---|---|
 | `/api/auth` | POST | Login | `{ password }` | `{ ok: true }` + cookie |
 | `/api/auth` | DELETE | Logout | - | `{ ok: true }` |
-| `/api/photos` | GET | Liste photos | - | `{ photos: [{index, filename, hasTitle, hasDescription}], total, totalInputTokens, totalOutputTokens }` |
-| `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription, inputTokens, outputTokens }` |
-| `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription? }` | Métadonnées mises à jour (incluant `inputTokens`, `outputTokens`) |
+| `/api/photos` | GET | Liste photos | - | `{ photos: [{index, filename, hasTitle, hasDescription, hasTheme, theme}], total, totalInputTokens, totalOutputTokens }` |
+| `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription, theme, inputTokens, outputTokens }` |
+| `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription?, theme? }` | Métadonnées mises à jour (incluant `inputTokens`, `outputTokens`) |
 | `/api/photos/[filename]/image` | GET | Servir image | - | Redirect → URL Blob signée |
 | `/api/generate` | POST | Génération IA | `{ transcription, filename }` | `{ title, description, transcription, inputTokens, outputTokens }` |
 | `/api/settings` | GET | Lire settings | - | Objet Settings |
@@ -145,7 +148,8 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 | `/api/pdfs` | GET | Liste PDFs | - | `{ pdfs: PdfFile[] }` |
 | `/api/pdfs` | POST | Upload PDF | FormData `file` | PdfFile créé (201) |
 | `/api/pdfs` | DELETE | Supprimer PDF | `{ id }` | `{ ok: true }` |
-| `/api/export` | GET | Export données | `?format=xlsx` optionnel | Fichier TSV ou XLSX |
+| `/api/themes/assign` | POST | Attribution thèmes IA | `{ numThemes }` (1-20) | `{ themes, assignments, inputTokens, outputTokens }` |
+| `/api/export` | GET | Export données | `?format=xlsx` optionnel | Fichier TSV ou XLSX (inclut Thème) |
 
 ### Pages et composants
 
@@ -159,7 +163,7 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 **Composants principaux** :
 
 - **`PhotoViewer`** (`photos, currentIndex, onNavigate`) : affiche l'image courante, navigation prev/next par boutons et flèches clavier, saisie directe du numéro de photo
-- **`PhotoMetadata`** (`filename`) : panneau d'édition titre/description avec compteurs de caractères (+ limites min/max depuis settings), affichage tokens et coût estimé en euros par photo, champ transcription en lecture seule, auto-save debounce 500ms, intègre VoiceRecorder
+- **`PhotoMetadata`** (`filename`) : panneau d'édition titre/description avec compteurs de caractères (+ limites min/max depuis settings), sélection du thème parmi les thèmes disponibles (boutons cliquables), affichage tokens et coût estimé en euros par photo, champ transcription en lecture seule, auto-save debounce 500ms, intègre VoiceRecorder
 - **`VoiceRecorder`** (`onTranscription, disabled?`) : bouton enregistrement/arrêt, Web Speech API en `fr-FR` continu, affiche la transcription interim en italique
 - **`AppHeader`** : barre de navigation (Photos, Paramètres, Export) + bouton déconnexion, highlight de la route active
 
@@ -212,6 +216,45 @@ Les champs `inputTokens` et `outputTokens` sont extraits de `response.usage` de 
 5. Appelle `generateTitleAndDescription()` via Claude SDK
 6. Sauvegarde titre + description + transcription en BDD (upsert), incrémente `inputTokens` et `outputTokens` de façon cumulative
 7. Retourne le résultat au client (incluant `inputTokens` et `outputTokens` cumulés)
+
+### Attribution des thèmes (`src/lib/claude.ts` → `assignThemes()`)
+
+**Modèle** : `claude-sonnet-4-6` | **Max tokens** : 4096
+
+**Fonctionnement** : analyse batch de toutes les photos pour déterminer n thèmes pertinents et attribuer chaque photo à un thème.
+
+**Input** (`AssignThemesInput`) :
+```typescript
+{
+  photos: { filename: string; title: string; description: string }[]
+  numThemes: number  // entre 1 et 20
+}
+```
+
+**Output** (`AssignThemesOutput`) via `output_config.format` (JSON schema) :
+```typescript
+{
+  themes: string[]                    // liste des n thèmes déterminés
+  assignments: Record<string, string> // mapping filename → thème
+  inputTokens: number
+  outputTokens: number
+}
+```
+
+**Prompt** : demande à Claude de déterminer exactement `numThemes` thèmes courts (1-3 mots, en français), avec une répartition équilibrée. Se base sur les titres/descriptifs existants ou le nom de fichier si pas de métadonnées.
+
+**Flux complet** (route `POST /api/themes/assign`) :
+1. Valide `numThemes` (1-20)
+2. Charge la liste des photos depuis Vercel Blob + métadonnées depuis la BDD
+3. Appelle `assignThemes()` via Claude SDK
+4. Met à jour le champ `theme` de chaque photo en BDD (transaction)
+5. Répartit les tokens de l'appel de façon égale entre toutes les photos
+6. Sauvegarde la liste des thèmes dans Settings (`themes` = JSON stringifié)
+7. Retourne les thèmes et les assignments au client
+
+**UI côté Paramètres** : sélecteur nombre de thèmes (1-20) + bouton "Attribuer les thèmes" + liste des thèmes affichée sous le bouton.
+
+**UI côté PhotoMetadata** : les thèmes disponibles sont affichés comme boutons cliquables. Le thème actuel est visuellement distinct (bouton plein). Clic sur un autre thème → attribution manuelle avec auto-save.
 
 ### Suivi des tokens et estimation des coûts
 
