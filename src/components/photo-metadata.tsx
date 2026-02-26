@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { VoiceRecorder } from "@/components/voice-recorder";
 
 interface PhotoMetadataProps {
@@ -15,6 +16,7 @@ interface Metadata {
   title: string;
   description: string;
   transcription: string;
+  theme: string;
   inputTokens: number;
   outputTokens: number;
 }
@@ -32,8 +34,9 @@ interface CharLimits {
 }
 
 export function PhotoMetadata({ filename }: PhotoMetadataProps) {
-  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", inputTokens: 0, outputTokens: 0 });
+  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", theme: "", inputTokens: 0, outputTokens: 0 });
   const [limits, setLimits] = useState<CharLimits | null>(null);
+  const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -48,6 +51,12 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
           descMin: data.descMinChars,
           descMax: data.descMaxChars,
         });
+        if (data.themes) {
+          try {
+            const parsed = JSON.parse(data.themes);
+            if (Array.isArray(parsed)) setAvailableThemes(parsed);
+          } catch { /* ignore invalid JSON */ }
+        }
       })
       .catch(() => {});
   }, []);
@@ -64,6 +73,7 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
             title: data.title ?? "",
             description: data.description ?? "",
             transcription: data.transcription ?? "",
+            theme: data.theme ?? "",
             inputTokens: data.inputTokens ?? 0,
             outputTokens: data.outputTokens ?? 0,
           });
@@ -124,13 +134,14 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
         }
 
         const data = await res.json();
-        setMeta({
+        setMeta((prev) => ({
           title: data.title,
           description: data.description,
           transcription: data.transcription,
+          theme: prev.theme,
           inputTokens: data.inputTokens ?? 0,
           outputTokens: data.outputTokens ?? 0,
-        });
+        }));
         toast.success("Titre et descriptif générés");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur lors de la génération");
@@ -155,6 +166,25 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
           {" "}({estimateCostEur(meta.inputTokens, meta.outputTokens).toLocaleString("fr-FR", { style: "currency", currency: "EUR", minimumFractionDigits: 4 })})
         </p>
       </div>
+
+      {availableThemes.length > 0 && (
+        <div className="space-y-1.5">
+          <Label>Thème</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {availableThemes.map((theme) => (
+              <Button
+                key={theme}
+                variant={meta.theme === theme ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => handleChange("theme", theme)}
+              >
+                {theme}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label htmlFor="title">Titre</Label>

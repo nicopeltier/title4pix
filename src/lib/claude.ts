@@ -3,6 +3,104 @@ import type { TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 
 const client = new Anthropic();
 
+// --- Theme assignment ---
+
+interface AssignThemesInput {
+  photos: { filename: string; title: string; description: string }[];
+  numThemes: number;
+}
+
+interface AssignThemesOutput {
+  themes: string[];
+  assignments: Record<string, string>; // filename → theme
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export async function assignThemes(
+  input: AssignThemesInput
+): Promise<AssignThemesOutput> {
+  const { photos, numThemes } = input;
+
+  const photoList = photos
+    .map((p) => {
+      const parts = [`- ${p.filename}`];
+      if (p.title) parts.push(`  Titre : ${p.title}`);
+      if (p.description) parts.push(`  Descriptif : ${p.description}`);
+      return parts.join("\n");
+    })
+    .join("\n");
+
+  const systemText = [
+    "Tu es un assistant spécialisé dans la classification thématique de photographies d'art.",
+    `Tu dois analyser la liste de photos ci-dessous et déterminer exactement ${numThemes} thèmes pertinents.`,
+    "Les thèmes doivent être courts (1 à 3 mots), en français.",
+    "Chaque photo doit être attribuée à exactement un thème.",
+    "La répartition doit être à peu près équilibrée entre les thèmes, tout en restant pertinente.",
+    "Si une photo n'a ni titre ni descriptif, base-toi sur le nom du fichier pour deviner le thème.",
+  ].join("\n\n");
+
+  const userText = [
+    `Voici la liste des ${photos.length} photos :\n`,
+    photoList,
+    `\nDétermine ${numThemes} thèmes et attribue chaque photo à un thème.`,
+  ].join("\n");
+
+  // Build the JSON schema for assignments: each filename maps to a theme
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    system: [
+      {
+        type: "text",
+        text: systemText,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: userText }],
+    output_config: {
+      format: {
+        type: "json_schema",
+        schema: {
+          type: "object",
+          properties: {
+            themes: {
+              type: "array",
+              items: { type: "string" },
+              description: `Liste des ${numThemes} thèmes déterminés`,
+            },
+            assignments: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description: "Mapping filename → thème attribué",
+            },
+          },
+          required: ["themes", "assignments"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Claude");
+  }
+
+  const parsed = JSON.parse(textBlock.text) as {
+    themes: string[];
+    assignments: Record<string, string>;
+  };
+
+  return {
+    ...parsed,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
+}
+
+// --- Title & description generation ---
+
 interface GenerateInput {
   imageBase64: string;
   imageMimeType: string;

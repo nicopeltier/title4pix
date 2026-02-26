@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
   const photos = await prisma.photo.findMany({
     where: { filename: { in: files } },
-    select: { filename: true, title: true, description: true },
+    select: { filename: true, title: true, description: true, theme: true },
   });
 
   const metaMap = new Map(photos.map((p) => [p.filename, p]));
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       "Nom du fichier": filename,
       Titre: meta?.title ?? "",
       Descriptif: meta?.description ?? "",
+      "Thème": meta?.theme ?? "",
     };
   });
 
@@ -41,11 +42,12 @@ export async function GET(request: NextRequest) {
   }
 
   // Default: TSV
-  const header = "Nom du fichier\tTitre\tDescriptif";
+  const header = "Nom du fichier\tTitre\tDescriptif\tThème";
   const tsvRows = rows.map((r) => {
     const title = r.Titre.replace(/\t/g, " ").replace(/\n/g, " ");
     const desc = r.Descriptif.replace(/\t/g, " ").replace(/\n/g, " ");
-    return `${r["Nom du fichier"]}\t${title}\t${desc}`;
+    const theme = r["Thème"].replace(/\t/g, " ").replace(/\n/g, " ");
+    return `${r["Nom du fichier"]}\t${title}\t${desc}\t${theme}`;
   });
 
   const content = [header, ...tsvRows].join("\n");

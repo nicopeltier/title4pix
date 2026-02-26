@@ -16,6 +16,7 @@ export async function GET(
     title: photo?.title ?? "",
     description: photo?.description ?? "",
     transcription: photo?.transcription ?? "",
+    theme: photo?.theme ?? "",
     inputTokens: photo?.inputTokens ?? 0,
     outputTokens: photo?.outputTokens ?? 0,
   });
@@ -32,6 +33,7 @@ export async function PUT(
   if ("title" in body) data.title = body.title;
   if ("description" in body) data.description = body.description;
   if ("transcription" in body) data.transcription = body.transcription;
+  if ("theme" in body) data.theme = body.theme;
 
   const photo = await prisma.photo.upsert({
     where: { filename },
@@ -44,6 +46,7 @@ export async function PUT(
     title: photo.title ?? "",
     description: photo.description ?? "",
     transcription: photo.transcription ?? "",
+    theme: photo.theme ?? "",
     inputTokens: photo.inputTokens,
     outputTokens: photo.outputTokens,
   });

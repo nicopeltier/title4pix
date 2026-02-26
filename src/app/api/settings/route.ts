@@ -21,6 +21,7 @@ export async function PUT(request: NextRequest) {
   if ("descMaxChars" in body) data.descMaxChars = Number(body.descMaxChars);
   if ("instructions" in body) data.instructions = String(body.instructions);
   if ("photographerUrl" in body) data.photographerUrl = String(body.photographerUrl);
+  if ("themes" in body) data.themes = String(body.themes);
 
   const settings = await prisma.settings.upsert({
     where: { id: 1 },

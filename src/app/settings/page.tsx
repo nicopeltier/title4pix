@@ -32,9 +32,20 @@ export default function SettingsPage() {
   const [totalOutputTokens, setTotalOutputTokens] = useState(0);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [numThemes, setNumThemes] = useState(5);
+  const [assigning, setAssigning] = useState(false);
+  const [themes, setThemes] = useState<string[]>([]);
 
   useEffect(() => {
-    fetch("/api/settings").then((r) => r.json()).then(setSettings);
+    fetch("/api/settings").then((r) => r.json()).then((data) => {
+      setSettings(data);
+      if (data.themes) {
+        try {
+          const parsed = JSON.parse(data.themes);
+          if (Array.isArray(parsed)) setThemes(parsed);
+        } catch { /* ignore invalid JSON */ }
+      }
+    });
     fetch("/api/pdfs").then((r) => r.json()).then((d) => setPdfs(d.pdfs));
     fetch("/api/photos").then((r) => r.json()).then((d) => {
       setTotalInputTokens(d.totalInputTokens ?? 0);
@@ -100,6 +111,28 @@ export default function SettingsPage() {
     setUploading(false);
     e.target.value = "";
   }, []);
+
+  const handleAssignThemes = useCallback(async () => {
+    setAssigning(true);
+    try {
+      const res = await fetch("/api/themes/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numThemes }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Erreur lors de l'attribution");
+      }
+      const data = await res.json();
+      setThemes(data.themes);
+      toast.success(`${data.themes.length} thèmes attribués`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur lors de l'attribution des thèmes");
+    } finally {
+      setAssigning(false);
+    }
+  }, [numThemes]);
 
   const handleDeletePdf = useCallback(async (id: number, name: string) => {
     try {
@@ -263,6 +296,54 @@ export default function SettingsPage() {
             )}
 
             {uploading && <p className="text-sm text-muted-foreground animate-pulse">Upload en cours...</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Attribuer les thèmes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Analyse l&apos;ensemble des photos et attribue automatiquement un thème à chacune.
+            </p>
+            <div className="flex items-end gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="numThemes">Nombre de thèmes</Label>
+                <Input
+                  id="numThemes"
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={numThemes}
+                  onChange={(e) => setNumThemes(Math.min(20, Math.max(1, Number(e.target.value))))}
+                  className="w-20"
+                />
+              </div>
+              <Button onClick={handleAssignThemes} disabled={assigning}>
+                {assigning ? "Attribution en cours..." : "Attribuer les thèmes"}
+              </Button>
+            </div>
+            {assigning && (
+              <p className="text-sm text-muted-foreground animate-pulse">
+                Analyse des photos en cours, cela peut prendre quelques secondes...
+              </p>
+            )}
+            {themes.length > 0 && (
+              <div className="space-y-2">
+                <Label>Thèmes déterminés</Label>
+                <div className="flex flex-wrap gap-2">
+                  {themes.map((theme) => (
+                    <span
+                      key={theme}
+                      className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-sm font-medium"
+                    >
+                      {theme}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
