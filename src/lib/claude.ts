@@ -10,6 +10,11 @@ interface AssignThemesInput {
   numThemes: number;
 }
 
+interface ThemeAssignment {
+  filename: string;
+  theme: string;
+}
+
 interface AssignThemesOutput {
   themes: string[];
   assignments: Record<string, string>; // filename → theme
@@ -70,9 +75,17 @@ export async function assignThemes(
               description: `Liste des ${numThemes} thèmes déterminés`,
             },
             assignments: {
-              type: "object",
-              additionalProperties: { type: "string" },
-              description: "Mapping filename → thème attribué",
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  filename: { type: "string", description: "Nom du fichier" },
+                  theme: { type: "string", description: "Thème attribué" },
+                },
+                required: ["filename", "theme"],
+                additionalProperties: false,
+              },
+              description: "Liste des attributions filename → thème",
             },
           },
           required: ["themes", "assignments"],
@@ -89,11 +102,18 @@ export async function assignThemes(
 
   const parsed = JSON.parse(textBlock.text) as {
     themes: string[];
-    assignments: Record<string, string>;
+    assignments: ThemeAssignment[];
   };
 
+  // Convert array to Record<filename, theme>
+  const assignments: Record<string, string> = {};
+  for (const a of parsed.assignments) {
+    assignments[a.filename] = a.theme;
+  }
+
   return {
-    ...parsed,
+    themes: parsed.themes,
+    assignments,
     inputTokens: response.usage.input_tokens,
     outputTokens: response.usage.output_tokens,
   };
