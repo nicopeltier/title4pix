@@ -29,9 +29,10 @@ export async function assignThemes(
 
   const photoList = photos
     .map((p) => {
-      const parts = [`- ${p.filename}`];
+      const parts = [`- [${p.filename}]`];
       if (p.title) parts.push(`  Titre : ${p.title}`);
       if (p.description) parts.push(`  Descriptif : ${p.description}`);
+      if (!p.title && !p.description) parts.push(`  (pas de métadonnées)`);
       return parts.join("\n");
     })
     .join("\n");
@@ -42,7 +43,8 @@ export async function assignThemes(
     "Les thèmes doivent être courts (1 à 3 mots), en français.",
     "Chaque photo doit être attribuée à exactement un thème.",
     "La répartition doit être à peu près équilibrée entre les thèmes, tout en restant pertinente.",
-    "Si une photo n'a ni titre ni descriptif, base-toi sur le nom du fichier pour deviner le thème.",
+    "Base-toi UNIQUEMENT sur les titres et descriptifs pour déterminer les thèmes. Ignore les noms de fichiers, ils ne sont pas pertinents.",
+    "Si une photo n'a ni titre ni descriptif, attribue-la au thème le plus générique ou le moins représenté.",
   ].join("\n\n");
 
   const userText = [
