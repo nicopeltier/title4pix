@@ -10,7 +10,7 @@ export async function GET() {
   // Fetch existing metadata for all photos
   const photos = await prisma.photo.findMany({
     where: { filename: { in: files } },
-    select: { filename: true, title: true, description: true, theme: true, inputTokens: true, outputTokens: true },
+    select: { filename: true, title: true, description: true, theme: true, fixedTheme: true, inputTokens: true, outputTokens: true },
   });
 
   const metaMap = new Map(photos.map((p) => [p.filename, p]));
@@ -24,6 +24,7 @@ export async function GET() {
       hasDescription: !!meta?.description,
       hasTheme: !!meta?.theme,
       theme: meta?.theme ?? "",
+      fixedTheme: meta?.fixedTheme ?? "",
     };
   });
 

@@ -22,6 +22,7 @@ export async function PUT(request: NextRequest) {
   if ("instructions" in body) data.instructions = String(body.instructions);
   if ("photographerUrl" in body) data.photographerUrl = String(body.photographerUrl);
   if ("themes" in body) data.themes = String(body.themes);
+  if ("fixedThemes" in body) data.fixedThemes = String(body.fixedThemes);
 
   const settings = await prisma.settings.upsert({
     where: { id: 1 },

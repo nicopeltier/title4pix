@@ -14,6 +14,7 @@ model Photo {
   description   String?
   transcription String?
   theme         String?
+  fixedTheme    String?
   inputTokens   Int      @default(0)
   outputTokens  Int      @default(0)
   createdAt     DateTime @default(now())
@@ -29,6 +30,7 @@ model Settings {
   instructions    String @default("")
   photographerUrl String @default("")
   themes          String @default("")
+  fixedThemes     String @default("")
 }
 
 model PdfFile {

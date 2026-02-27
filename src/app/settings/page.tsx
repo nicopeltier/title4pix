@@ -35,6 +35,8 @@ export default function SettingsPage() {
   const [numThemes, setNumThemes] = useState(5);
   const [assigning, setAssigning] = useState(false);
   const [themes, setThemes] = useState<string[]>([]);
+  const [fixedThemes, setFixedThemes] = useState<string[]>([]);
+  const [newFixedTheme, setNewFixedTheme] = useState("");
 
   useEffect(() => {
     fetch("/api/settings").then((r) => r.json()).then((data) => {
@@ -43,6 +45,12 @@ export default function SettingsPage() {
         try {
           const parsed = JSON.parse(data.themes);
           if (Array.isArray(parsed)) setThemes(parsed);
+        } catch { /* ignore invalid JSON */ }
+      }
+      if (data.fixedThemes) {
+        try {
+          const parsed = JSON.parse(data.fixedThemes);
+          if (Array.isArray(parsed)) setFixedThemes(parsed);
         } catch { /* ignore invalid JSON */ }
       }
     });
@@ -147,6 +155,39 @@ export default function SettingsPage() {
       toast.error("Erreur lors de la suppression");
     }
   }, []);
+
+  const handleAddFixedTheme = useCallback(async () => {
+    const trimmed = newFixedTheme.trim();
+    if (!trimmed || fixedThemes.includes(trimmed)) return;
+    const updated = [...fixedThemes, trimmed];
+    setFixedThemes(updated);
+    setNewFixedTheme("");
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fixedThemes: JSON.stringify(updated) }),
+      });
+      toast.success("Thème fixe ajouté");
+    } catch {
+      toast.error("Erreur lors de l'ajout");
+    }
+  }, [newFixedTheme, fixedThemes]);
+
+  const handleDeleteFixedTheme = useCallback(async (theme: string) => {
+    const updated = fixedThemes.filter((t) => t !== theme);
+    setFixedThemes(updated);
+    try {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fixedThemes: JSON.stringify(updated) }),
+      });
+      toast.success("Thème fixe supprimé");
+    } catch {
+      toast.error("Erreur lors de la suppression");
+    }
+  }, [fixedThemes]);
 
   if (!settings) {
     return (
@@ -344,6 +385,53 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Thèmes fixes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Thèmes manuels attribuables individuellement à chaque photo.
+            </p>
+
+            {fixedThemes.length > 0 && (
+              <ul className="space-y-2">
+                {fixedThemes.map((theme) => (
+                  <li key={theme} className="flex items-center justify-between rounded-md border px-3 py-2">
+                    <span className="text-sm font-medium">{theme}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive shrink-0"
+                      onClick={() => handleDeleteFixedTheme(theme)}
+                    >
+                      Supprimer
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddFixedTheme();
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                value={newFixedTheme}
+                onChange={(e) => setNewFixedTheme(e.target.value)}
+                placeholder="Nouveau thème fixe..."
+                className="flex-1"
+              />
+              <Button type="submit" disabled={!newFixedTheme.trim()}>
+                Ajouter
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
