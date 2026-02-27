@@ -17,6 +17,15 @@ export async function GET(request: NextRequest) {
 
   const metaMap = new Map(photos.map((p) => [p.filename, p]));
 
+  const formatFixedThemes = (raw: string | null | undefined): string => {
+    if (!raw) return "";
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.join("; ");
+    } catch { /* not JSON, return as-is */ }
+    return raw;
+  };
+
   const rows = files.map((filename) => {
     const meta = metaMap.get(filename);
     return {
@@ -24,7 +33,7 @@ export async function GET(request: NextRequest) {
       Titre: meta?.title ?? "",
       Descriptif: meta?.description ?? "",
       "Thème": meta?.theme ?? "",
-      "Thème fixe": meta?.fixedTheme ?? "",
+      "Thème fixe": formatFixedThemes(meta?.fixedTheme),
     };
   });
 

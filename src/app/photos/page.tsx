@@ -12,7 +12,16 @@ interface PhotoItem {
   filename: string;
   hasTitle: boolean;
   hasDescription: boolean;
-  fixedTheme: string;
+  fixedTheme: string[];
+}
+
+function parseFixedThemes(raw: string): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch { /* not JSON */ }
+  return [raw];
 }
 
 export default function PhotosPage() {
@@ -25,7 +34,12 @@ export default function PhotosPage() {
     fetch("/api/photos")
       .then((r) => r.json())
       .then((data) => {
-        setPhotos(data.photos);
+        setPhotos(
+          data.photos.map((p: { index: number; filename: string; hasTitle: boolean; hasDescription: boolean; fixedTheme: string }) => ({
+            ...p,
+            fixedTheme: parseFixedThemes(p.fixedTheme),
+          }))
+        );
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -42,10 +56,10 @@ export default function PhotosPage() {
   }, []);
 
   const handleFixedThemeChange = useCallback(
-    (newTheme: string) => {
+    (newThemes: string[]) => {
       setPhotos((prev) =>
         prev.map((p, i) =>
-          i === currentIndex ? { ...p, fixedTheme: newTheme } : p
+          i === currentIndex ? { ...p, fixedTheme: newThemes } : p
         )
       );
     },

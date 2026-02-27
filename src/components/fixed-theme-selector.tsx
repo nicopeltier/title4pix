@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 
 interface FixedThemeSelectorProps {
   filename: string;
-  fixedTheme: string;
+  fixedTheme: string[];
   availableFixedThemes: string[];
-  onFixedThemeChange: (fixedTheme: string) => void;
+  onFixedThemeChange: (fixedThemes: string[]) => void;
 }
 
 export function FixedThemeSelector({
@@ -21,7 +21,9 @@ export function FixedThemeSelector({
 
   const handleSelect = useCallback(
     async (theme: string) => {
-      const newValue = fixedTheme === theme ? "" : theme;
+      const newValue = fixedTheme.includes(theme)
+        ? fixedTheme.filter((t) => t !== theme)
+        : [...fixedTheme, theme];
       setSaving(true);
       try {
         const res = await fetch(
@@ -29,7 +31,7 @@ export function FixedThemeSelector({
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fixedTheme: newValue }),
+            body: JSON.stringify({ fixedTheme: JSON.stringify(newValue) }),
           }
         );
         if (!res.ok) throw new Error();
@@ -48,13 +50,13 @@ export function FixedThemeSelector({
   return (
     <div className="space-y-1.5">
       <p className="text-lg font-bold">
-        {fixedTheme || <span className="text-muted-foreground">Non défini</span>}
+        {fixedTheme.length > 0 ? fixedTheme.join(", ") : <span className="text-muted-foreground">Non défini</span>}
       </p>
       <div className="flex flex-wrap gap-1.5">
         {availableFixedThemes.map((theme) => (
           <Button
             key={theme}
-            variant={fixedTheme === theme ? "default" : "outline"}
+            variant={fixedTheme.includes(theme) ? "default" : "outline"}
             size="sm"
             className="h-7 text-xs"
             onClick={() => handleSelect(theme)}
