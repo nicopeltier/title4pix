@@ -18,6 +18,7 @@ export async function GET(
     transcription: photo?.transcription ?? "",
     theme: photo?.theme ?? "",
     fixedTheme: photo?.fixedTheme ?? "",
+    hasAudio: !!photo?.audioUrl,
     inputTokens: photo?.inputTokens ?? 0,
     outputTokens: photo?.outputTokens ?? 0,
   });

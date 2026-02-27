@@ -15,6 +15,7 @@ model Photo {
   transcription String?
   theme         String?
   fixedTheme    String?
+  audioUrl      String?
   inputTokens   Int      @default(0)
   outputTokens  Int      @default(0)
   createdAt     DateTime @default(now())

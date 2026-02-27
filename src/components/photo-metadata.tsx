@@ -17,6 +17,7 @@ interface Metadata {
   description: string;
   transcription: string;
   theme: string;
+  hasAudio: boolean;
   inputTokens: number;
   outputTokens: number;
 }
@@ -34,11 +35,12 @@ interface CharLimits {
 }
 
 export function PhotoMetadata({ filename }: PhotoMetadataProps) {
-  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", theme: "", inputTokens: 0, outputTokens: 0 });
+  const [meta, setMeta] = useState<Metadata>({ title: "", description: "", transcription: "", theme: "", hasAudio: false, inputTokens: 0, outputTokens: 0 });
   const [limits, setLimits] = useState<CharLimits | null>(null);
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [audioKey, setAudioKey] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
@@ -74,6 +76,7 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
             description: data.description ?? "",
             transcription: data.transcription ?? "",
             theme: data.theme ?? "",
+            hasAudio: data.hasAudio ?? false,
             inputTokens: data.inputTokens ?? 0,
             outputTokens: data.outputTokens ?? 0,
           });
@@ -139,6 +142,7 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
           description: data.description,
           transcription: data.transcription,
           theme: prev.theme,
+          hasAudio: prev.hasAudio,
           inputTokens: data.inputTokens ?? 0,
           outputTokens: data.outputTokens ?? 0,
         }));
@@ -147,6 +151,27 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
         toast.error(err instanceof Error ? err.message : "Erreur lors de la génération");
       } finally {
         setGenerating(false);
+      }
+    },
+    [filename]
+  );
+
+  const handleAudioRecorded = useCallback(
+    async (blob: Blob) => {
+      const formData = new FormData();
+      formData.append("audio", blob, `${filename}.webm`);
+
+      try {
+        const res = await fetch(`/api/photos/${encodeURIComponent(filename)}/audio`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error();
+        setMeta((prev) => ({ ...prev, hasAudio: true }));
+        setAudioKey((k) => k + 1);
+      } catch {
+        toast.error("Erreur lors de la sauvegarde de l'audio");
       }
     },
     [filename]
@@ -229,8 +254,21 @@ export function PhotoMetadata({ filename }: PhotoMetadataProps) {
         />
       </div>
 
+      {meta.hasAudio && (
+        <div className="space-y-1.5">
+          <Label>Audio</Label>
+          <audio
+            key={audioKey}
+            controls
+            className="w-full h-8"
+            src={`/api/photos/${encodeURIComponent(filename)}/audio`}
+          />
+        </div>
+      )}
+
       <VoiceRecorder
         onTranscription={handleTranscription}
+        onAudioRecorded={handleAudioRecorded}
         disabled={generating}
       />
 

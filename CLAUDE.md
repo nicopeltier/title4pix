@@ -89,6 +89,7 @@ model Photo {
   transcription String?                // transcription vocale brute
   theme         String?                // thème suggéré par l'IA ou sélectionné manuellement
   fixedTheme    String?                // thème fixe attribué manuellement par l'utilisateur
+  audioUrl      String?                // URL Vercel Blob du fichier audio (webm)
   inputTokens   Int      @default(0)   // tokens input Claude cumulés
   outputTokens  Int      @default(0)   // tokens output Claude cumulés
   createdAt     DateTime @default(now())
@@ -127,6 +128,7 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 | Préfixe Blob | Contenu | Accès |
 |---|---|---|
 | `photos/{filename}` | Images des photos | Privé, URLs signées |
+| `audio/{filename}.webm` | Enregistrements vocaux (1 par photo, remplacé à chaque nouvel enregistrement) | Privé, URLs signées |
 | `pdfs/{uuid}.pdf` | PDFs de contexte IA | Privé, URLs signées |
 
 **Fonctions clés** (`src/lib/photos.ts`) :
@@ -145,6 +147,8 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 | `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription, theme, fixedTheme, inputTokens, outputTokens }` |
 | `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription?, theme?, fixedTheme? }` | Métadonnées mises à jour (incluant `inputTokens`, `outputTokens`) |
 | `/api/photos/[filename]/image` | GET | Servir image | - | Redirect → URL Blob signée |
+| `/api/photos/[filename]/audio` | POST | Upload audio | FormData `audio` (webm) | `{ audioUrl }` (remplace l'ancien) |
+| `/api/photos/[filename]/audio` | GET | Servir audio | - | Fichier audio webm |
 | `/api/generate` | POST | Génération IA | `{ transcription, filename }` | `{ title, description, transcription, inputTokens, outputTokens }` |
 | `/api/settings` | GET | Lire settings | - | Objet Settings |
 | `/api/settings` | PUT | MAJ settings | Champs Settings partiels | Settings mis à jour |
@@ -173,11 +177,15 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 
 ## Flux IA (coeur du système)
 
-### Transcription vocale
-- **Technologie** : Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`)
+### Transcription vocale et capture audio
+- **Transcription** : Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`)
+- **Capture audio** : MediaRecorder API (en parallèle de la transcription)
+- **Format audio** : WebM/Opus (`audio/webm`)
 - **Navigateurs** : Chrome et Edge uniquement (message d'avertissement sinon)
 - **Langue** : `fr-FR`, mode continu avec résultats intermédiaires
-- **Flux** : clic "Enregistrer" → écoute micro → transcription temps réel → clic "Arrêter" → callback `onTranscription(text)`
+- **Flux** : clic "Enregistrer" → `getUserMedia()` → MediaRecorder + SpeechRecognition démarrent en parallèle → transcription temps réel → clic "Arrêter" → transcription envoyée au parent + audio blob uploadé sur Vercel Blob
+- **Stockage audio** : 1 fichier par photo, le nouvel enregistrement remplace l'ancien (ancien blob supprimé). URL stockée dans `Photo.audioUrl`
+- **Lecture** : élément `<audio>` dans PhotoMetadata quand un audio existe
 
 ### Génération titre et description (`src/lib/claude.ts`)
 
