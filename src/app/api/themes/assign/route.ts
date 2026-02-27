@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getPhotoList } from "@/lib/photos";
 import { assignThemes } from "@/lib/claude";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const { numThemes } = await request.json();

@@ -129,12 +129,17 @@ export default function SettingsPage() {
         body: JSON.stringify({ numThemes }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Erreur lors de l'attribution");
+        const text = await res.text();
+        let message = "Erreur lors de l'attribution";
+        try {
+          const data = JSON.parse(text);
+          if (data.error) message = data.error;
+        } catch { /* response not JSON (e.g. Vercel timeout) */ }
+        throw new Error(message);
       }
       const data = await res.json();
       setThemes(data.themes);
-      toast.success(`${data.themes.length} thèmes attribués`);
+      toast.success(`${data.themes.length} thèmes suggérés`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de l'attribution des thèmes");
     } finally {
@@ -342,11 +347,11 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Attribuer les thèmes</CardTitle>
+            <CardTitle>Thèmes suggérés</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Analyse l&apos;ensemble des photos et attribue automatiquement un thème à chacune.
+              Analyse l&apos;ensemble des photos et suggère automatiquement un thème à chacune.
             </p>
             <div className="flex items-end gap-4">
               <div className="space-y-1.5">
@@ -362,7 +367,7 @@ export default function SettingsPage() {
                 />
               </div>
               <Button onClick={handleAssignThemes} disabled={assigning}>
-                {assigning ? "Attribution en cours..." : "Attribuer les thèmes"}
+                {assigning ? "Attribution en cours..." : "Suggérer les thèmes"}
               </Button>
             </div>
             {assigning && (
@@ -372,7 +377,7 @@ export default function SettingsPage() {
             )}
             {themes.length > 0 && (
               <div className="space-y-2">
-                <Label>Thèmes déterminés</Label>
+                <Label>Thèmes suggérés</Label>
                 <div className="flex flex-wrap gap-2">
                   {themes.map((theme) => (
                     <span

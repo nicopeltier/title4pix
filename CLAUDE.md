@@ -18,7 +18,7 @@ Application web permettant à un photographe de donner des titres et descriptifs
 
 ## Hébergement et déploiement
 
-- **Plateforme** : Vercel (plan Hobby)
+- **Plateforme** : Vercel (plan Pro)
 - **Repo GitHub** : `nicopeltier/title4pix` (branche `main`)
 - **Domaine** : `title4pix.paradigmchange.org` (CNAME Namecheap → `cname.vercel-dns.com`)
 - **Base de données** : Neon Serverless Postgres (région Frankfurt, plan Free)
@@ -64,6 +64,7 @@ title4pix/
 │   │   ├── app-header.tsx        # navigation + logout
 │   │   ├── photo-viewer.tsx      # affichage photo + navigation (clavier + boutons)
 │   │   ├── photo-metadata.tsx    # édition titre/desc/thème + compteurs caractères + voice
+│   │   ├── fixed-theme-selector.tsx  # sélection thème fixe (boutons au-dessus de l'image)
 │   │   └── voice-recorder.tsx    # enregistrement vocal Web Speech API
 │   ├── lib/
 │   │   ├── prisma.ts             # singleton PrismaClient avec PrismaPg adapter
@@ -86,7 +87,8 @@ model Photo {
   title         String?                // titre généré ou saisi
   description   String?                // descriptif généré ou saisi
   transcription String?                // transcription vocale brute
-  theme         String?                // thème attribué par l'IA ou manuellement
+  theme         String?                // thème suggéré par l'IA ou sélectionné manuellement
+  fixedTheme    String?                // thème fixe attribué manuellement par l'utilisateur
   inputTokens   Int      @default(0)   // tokens input Claude cumulés
   outputTokens  Int      @default(0)   // tokens output Claude cumulés
   createdAt     DateTime @default(now())
@@ -101,7 +103,8 @@ model Settings {
   descMaxChars    Int    @default(500)
   instructions    String @default("")   // consignes IA personnalisées
   photographerUrl String @default("")   // URL site web du photographe
-  themes          String @default("")   // liste JSON des thèmes déterminés (ex: '["Paysage","Portrait"]')
+  themes          String @default("")   // liste JSON des thèmes suggérés par l'IA (ex: '["Paysage","Portrait"]')
+  fixedThemes     String @default("")   // liste JSON des thèmes fixes définis par l'utilisateur
 }
 
 model PdfFile {
@@ -138,9 +141,9 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 |---|---|---|---|---|
 | `/api/auth` | POST | Login | `{ password }` | `{ ok: true }` + cookie |
 | `/api/auth` | DELETE | Logout | - | `{ ok: true }` |
-| `/api/photos` | GET | Liste photos | - | `{ photos: [{index, filename, hasTitle, hasDescription, hasTheme, theme}], total, totalInputTokens, totalOutputTokens }` |
-| `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription, theme, inputTokens, outputTokens }` |
-| `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription?, theme? }` | Métadonnées mises à jour (incluant `inputTokens`, `outputTokens`) |
+| `/api/photos` | GET | Liste photos | - | `{ photos: [{index, filename, hasTitle, hasDescription, hasTheme, theme, fixedTheme}], total, totalInputTokens, totalOutputTokens }` |
+| `/api/photos/[filename]` | GET | Métadonnées photo | - | `{ filename, title, description, transcription, theme, fixedTheme, inputTokens, outputTokens }` |
+| `/api/photos/[filename]` | PUT | MAJ métadonnées | `{ title?, description?, transcription?, theme?, fixedTheme? }` | Métadonnées mises à jour (incluant `inputTokens`, `outputTokens`) |
 | `/api/photos/[filename]/image` | GET | Servir image | - | Redirect → URL Blob signée |
 | `/api/generate` | POST | Génération IA | `{ transcription, filename }` | `{ title, description, transcription, inputTokens, outputTokens }` |
 | `/api/settings` | GET | Lire settings | - | Objet Settings |
@@ -148,22 +151,23 @@ Tous les fichiers sont stockés en accès **privé**. Les URLs de téléchargeme
 | `/api/pdfs` | GET | Liste PDFs | - | `{ pdfs: PdfFile[] }` |
 | `/api/pdfs` | POST | Upload PDF | FormData `file` | PdfFile créé (201) |
 | `/api/pdfs` | DELETE | Supprimer PDF | `{ id }` | `{ ok: true }` |
-| `/api/themes/assign` | POST | Attribution thèmes IA | `{ numThemes }` (1-20) | `{ themes, assignments, inputTokens, outputTokens }` |
-| `/api/export` | GET | Export données | `?format=xlsx` optionnel | Fichier TSV ou XLSX (inclut Thème) |
+| `/api/themes/assign` | POST | Suggestion thèmes IA | `{ numThemes }` (1-20) | `{ themes, assignments, inputTokens, outputTokens }` |
+| `/api/export` | GET | Export données | `?format=xlsx` optionnel | Fichier TSV ou XLSX (inclut Thème + Thème fixe) |
 
 ### Pages et composants
 
 | Page | Route | Composants utilisés |
 |---|---|---|
 | Login | `/` | Card, Input, Button, Label |
-| Photos (viewer) | `/photos` | AppHeader, PhotoViewer, PhotoMetadata, Progress |
+| Photos (viewer) | `/photos` | AppHeader, FixedThemeSelector, PhotoViewer, PhotoMetadata, Progress |
 | Paramètres | `/settings` | AppHeader, Card, Input, Textarea, Button |
 | Export | `/export` | AppHeader, Card, Button |
 
 **Composants principaux** :
 
 - **`PhotoViewer`** (`photos, currentIndex, onNavigate`) : affiche l'image courante, navigation prev/next par boutons et flèches clavier, saisie directe du numéro de photo
-- **`PhotoMetadata`** (`filename`) : panneau d'édition titre/description avec compteurs de caractères (+ limites min/max depuis settings), sélection du thème parmi les thèmes disponibles (boutons cliquables), affichage tokens et coût estimé en euros par photo, champ transcription en lecture seule, auto-save debounce 500ms, intègre VoiceRecorder
+- **`FixedThemeSelector`** (`filename, fixedTheme, availableFixedThemes, onFixedThemeChange`) : affiché au-dessus de l'image, montre le thème fixe sélectionné en gras (ou "Non défini"), boutons petits pour chaque thème fixe disponible, sauvegarde instantanée au clic
+- **`PhotoMetadata`** (`filename`) : panneau d'édition titre/description avec compteurs de caractères (+ limites min/max depuis settings), sélection du thème suggéré parmi les thèmes disponibles (boutons cliquables), affichage tokens et coût estimé en euros par photo, champ transcription en lecture seule, auto-save debounce 500ms, intègre VoiceRecorder
 - **`VoiceRecorder`** (`onTranscription, disabled?`) : bouton enregistrement/arrêt, Web Speech API en `fr-FR` continu, affiche la transcription interim en italique
 - **`AppHeader`** : barre de navigation (Photos, Paramètres, Export) + bouton déconnexion, highlight de la route active
 
@@ -217,11 +221,11 @@ Les champs `inputTokens` et `outputTokens` sont extraits de `response.usage` de 
 6. Sauvegarde titre + description + transcription en BDD (upsert), incrémente `inputTokens` et `outputTokens` de façon cumulative
 7. Retourne le résultat au client (incluant `inputTokens` et `outputTokens` cumulés)
 
-### Attribution des thèmes (`src/lib/claude.ts` → `assignThemes()`)
+### Suggestion des thèmes (`src/lib/claude.ts` → `assignThemes()`)
 
-**Modèle** : `claude-sonnet-4-6` | **Max tokens** : 4096
+**Modèle** : `claude-sonnet-4-6` | **Max tokens** : 16384 | **maxDuration** : 300s
 
-**Fonctionnement** : analyse batch de toutes les photos pour déterminer n thèmes pertinents et attribuer chaque photo à un thème.
+**Fonctionnement** : analyse batch de toutes les photos pour suggérer n thèmes pertinents et attribuer chaque photo à un thème.
 
 **Input** (`AssignThemesInput`) :
 ```typescript
@@ -252,9 +256,13 @@ Les champs `inputTokens` et `outputTokens` sont extraits de `response.usage` de 
 6. Sauvegarde la liste des thèmes dans Settings (`themes` = JSON stringifié)
 7. Retourne les thèmes et les assignments au client
 
-**UI côté Paramètres** : sélecteur nombre de thèmes (1-20) + bouton "Attribuer les thèmes" + liste des thèmes affichée sous le bouton.
+**UI côté Paramètres** :
+- **Thèmes suggérés** : sélecteur nombre de thèmes (1-20) + bouton "Suggérer les thèmes" + liste des thèmes affichée sous le bouton.
+- **Thèmes fixes** : CRUD pour gérer une liste de thèmes définis par l'utilisateur (ajout/suppression). Sauvegarde immédiate via `PUT /api/settings`. Stockés dans `Settings.fixedThemes` (JSON stringifié).
 
-**UI côté PhotoMetadata** : les thèmes disponibles sont affichés comme boutons cliquables. Le thème actuel est visuellement distinct (bouton plein). Clic sur un autre thème → attribution manuelle avec auto-save.
+**UI côté PhotoMetadata** : les thèmes suggérés disponibles sont affichés comme boutons cliquables. Le thème actuel est visuellement distinct (bouton plein). Clic sur un autre thème → attribution manuelle avec auto-save.
+
+**UI côté Photos (au-dessus de l'image)** : composant `FixedThemeSelector` affiche le thème fixe en gras ("Non défini" si vide) + boutons petits pour chaque thème fixe. Clic = sauvegarde instantanée via `PUT /api/photos/[filename]`.
 
 ### Suivi des tokens et estimation des coûts
 
@@ -347,7 +355,7 @@ git add -A && git commit -m "description" && git push  # → auto-deploy Vercel
 
 ### Vercel Serverless
 - **Pas de filesystem persistant** : tout fichier doit être lu/écrit via Vercel Blob, pas `fs`
-- **Timeout** : 10s par défaut sur les fonctions serverless (plan Hobby). La génération IA peut approcher cette limite avec de gros PDFs
+- **Timeout** : 10s par défaut, extensible via `maxDuration` (jusqu'à 300s en plan Pro). La route `/api/themes/assign` utilise `maxDuration = 300` pour le traitement batch
 - **Cold starts** : la première requête après inactivité peut être plus lente
 
 ### Vercel Blob (privé)
